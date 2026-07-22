@@ -1,0 +1,174 @@
+name: Microservices CI/CD
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - "services/**"
+      - "helm/**"
+      - ".github/workflows/ci-cd.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "services/**"
+      - "helm/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  REGISTRY: docker.io
+
+jobs:
+  build-test-and-push:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - service-a
+          - service-b
+          - service-c
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: services/${{ matrix.service }}/pom.xml
+
+      - name: Run tests
+        working-directory: services/${{ matrix.service }}
+        run: mvn clean test
+
+      - name: Package application
+        working-directory: services/${{ matrix.service }}
+        run: mvn package -DskipTests
+
+      - name: Set image tag
+        id: meta
+        shell: bash
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          echo "image_tag=${GITHUB_REF_NAME}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v6
+        with:
+          context: services/${{ matrix.service }}
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.service }}:${{ steps.meta.outputs.image_tag }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.service }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  helm-validation:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        service:
+          - service-a
+          - service-b
+          - service-c
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Build Helm dependencies
+        run: helm dependency build helm/${{ matrix.service }}
+
+      - name: Lint default values
+        run: helm lint helm/${{ matrix.service }}
+
+      - name: Render dev manifests
+        run: helm template ${{ matrix.service }} helm/${{ matrix.service }} -f helm/${{ matrix.service }}/values-dev.yaml
+
+      - name: Render QA manifests
+        run: helm template ${{ matrix.service }} helm/${{ matrix.service }} -f helm/${{ matrix.service }}/values-qa.yaml
+
+      - name: Render production manifests
+        run: helm template ${{ matrix.service }} helm/${{ matrix.service }} -f helm/${{ matrix.service }}/values-production.yaml
+
+  update-gitops-values:
+    if: github.event_name == 'push'
+    needs:
+      - build-test-and-push
+      - helm-validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install yq
+        uses: mikefarah/yq@v4.44.3
+
+      - name: Select environment
+        id: env
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_NAME}" == "main" ]]; then
+            echo "name=production" >> "$GITHUB_OUTPUT"
+            echo "values=values-production.yaml" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=dev" >> "$GITHUB_OUTPUT"
+            echo "values=values-dev.yaml" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Update image repositories and tags
+        shell: bash
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          VALUES_FILE: ${{ steps.env.outputs.values }}
+        run: |
+          IMAGE_TAG="${GITHUB_REF_NAME}-${GITHUB_SHA::7}"
+
+          for service in service-a service-b service-c; do
+            yq -i ".image.repository = \"${DOCKERHUB_USERNAME}/${service}\"" "helm/${service}/${VALUES_FILE}"
+            yq -i ".image.tag = \"${IMAGE_TAG}\"" "helm/${service}/${VALUES_FILE}"
+          done
+
+      - name: Commit GitOps changes
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No GitOps changes to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add helm/
+          git commit -m "chore(gitops): update images for ${GITHUB_REF_NAME}-${GITHUB_SHA::7}"
+          git push

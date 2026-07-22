@@ -1,0 +1,33 @@
+replicaCount: 2
+
+image:
+  tag: production-latest
+
+environment: production
+
+env:
+  SERVER_PORT: "8082"
+  APP_ENVIRONMENT: production
+
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: service-b.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70

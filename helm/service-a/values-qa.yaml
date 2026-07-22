@@ -1,0 +1,21 @@
+replicaCount: 1
+
+image:
+  tag: qa-latest
+
+environment: qa
+
+env:
+  SERVER_PORT: "8081"
+  APP_ENVIRONMENT: qa
+
+ingress:
+  enabled: false
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
