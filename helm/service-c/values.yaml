@@ -1,25 +1,69 @@
 replicaCount: 1
 
 image:
-  repository: your-dockerhub-username/service-c
-  tag: latest
+  repository: akshaygouda646/service-c
+  tag: v1
   pullPolicy: IfNotPresent
 
-imagePullSecrets: []
-nameOverride: ""
-fullnameOverride: ""
+containerPort: 8085
 
-serviceAccount:
-  create: true
-  name: ""
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8085
+
+ingress:
+  enabled: true
+  className: nginx
+  host: service-c.local
+  path: /
+  pathType: Prefix
+
+deployment:
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+
+probes:
+  readiness:
+    path: /actuator/health/readiness
+    initialDelaySeconds: 20
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+
+  liveness:
+    path: /actuator/health/liveness
+    initialDelaySeconds: 40
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+resources:
+  requests:
+    memory: 256Mi
+    cpu: 100m
+  limits:
+    memory: 512Mi
+    cpu: 500m
+
+config:
+  SPRING_PROFILES_ACTIVE: default
+  SERVICE_NAME: service-c
+
+secret:
+  create: false
+  name: service-c-secret
+  databaseUsername: ""
+  databasePassword: ""
 
 podAnnotations: {}
-podLabels: {}
 
 podSecurityContext:
   runAsNonRoot: true
-  runAsUser: 10001
-  fsGroup: 10001
 
 securityContext:
   allowPrivilegeEscalation: false
@@ -28,52 +72,4 @@ securityContext:
     drop:
       - ALL
 
-service:
-  type: ClusterIP
-  port: 8083
-  targetPort: 8083
 
-ingress:
-  enabled: false
-  className: nginx
-  annotations: {}
-  hosts:
-    - host: service-c.local
-      paths:
-        - path: /
-          pathType: Prefix
-  tls: []
-
-environment: dev
-
-env:
-  SERVER_PORT: "8083"
-  APP_ENVIRONMENT: dev
-
-resources:
-  requests:
-    cpu: 100m
-    memory: 128Mi
-  limits:
-    cpu: 500m
-    memory: 512Mi
-
-livenessProbe:
-  path: /actuator/health/liveness
-  initialDelaySeconds: 30
-  periodSeconds: 10
-
-readinessProbe:
-  path: /actuator/health/readiness
-  initialDelaySeconds: 15
-  periodSeconds: 10
-
-autoscaling:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 3
-  targetCPUUtilizationPercentage: 80
-
-nodeSelector: {}
-tolerations: []
-affinity: {}

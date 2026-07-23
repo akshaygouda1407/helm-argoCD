@@ -1,21 +1,28 @@
 replicaCount: 1
 
 image:
-  tag: dev-latest
-
-environment: dev
-
-env:
-  SERVER_PORT: "8083"
-  APP_ENVIRONMENT: dev
+  repository: akshaygouda646/service-c
+  tag: v1
+  pullPolicy: IfNotPresent
 
 ingress:
-  enabled: false
+  enabled: true
+  host: service-c-dev.local
+
+config:
+  SPRING_PROFILES_ACTIVE: dev
+  SERVICE_NAME: service-c
 
 resources:
   requests:
+    memory: 128Mi
     cpu: 50m
-    memory: 96Mi
   limits:
-    cpu: 250m
     memory: 256Mi
+    cpu: 250m
+
+secret:
+  create: false
+  name: service-c-dev-secret
+
+

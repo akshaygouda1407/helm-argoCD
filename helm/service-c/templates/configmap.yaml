@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "service-c.fullname" . }}-config
+  labels:
+    {{- include "service-c.labels" . | nindent 4 }}
+data:
+  SPRING_PROFILES_ACTIVE: {{ .Values.config.SPRING_PROFILES_ACTIVE | quote }}
+  SERVICE_NAME: {{ .Values.config.SERVICE_NAME | quote }}
+
+

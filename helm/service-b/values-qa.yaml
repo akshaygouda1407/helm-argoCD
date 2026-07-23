@@ -1,21 +1,27 @@
-replicaCount: 1
+replicaCount: 2
 
 image:
-  tag: qa-latest
-
-environment: qa
-
-env:
-  SERVER_PORT: "8082"
-  APP_ENVIRONMENT: qa
+  repository: akshaygouda646/service-b
+  tag: v1
+  pullPolicy: IfNotPresent
 
 ingress:
-  enabled: false
+  enabled: true
+  host: service-b-qa.local
+
+config:
+  SPRING_PROFILES_ACTIVE: qa
+  SERVICE_NAME: service-b
 
 resources:
   requests:
+    memory: 256Mi
     cpu: 100m
-    memory: 128Mi
   limits:
-    cpu: 500m
     memory: 512Mi
+    cpu: 500m
+
+secret:
+  create: false
+  name: service-b-qa-secret
+
