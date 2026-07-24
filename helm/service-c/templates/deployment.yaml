@@ -1,39 +1,64 @@
 apiVersion: apps/v1
 kind: Deployment
+
 metadata:
   name: {{ include "service-c.fullname" . }}
   labels:
     {{- include "service-c.labels" . | nindent 4 }}
+
 spec:
   replicas: {{ .Values.replicaCount }}
   revisionHistoryLimit: {{ .Values.deployment.revisionHistoryLimit }}
+
   strategy:
     type: {{ .Values.deployment.strategy.type }}
+    {{- if eq .Values.deployment.strategy.type "RollingUpdate" }}
     rollingUpdate:
       maxUnavailable: {{ .Values.deployment.strategy.rollingUpdate.maxUnavailable }}
       maxSurge: {{ .Values.deployment.strategy.rollingUpdate.maxSurge }}
+    {{- end }}
+
   selector:
     matchLabels:
       {{- include "service-c.selectorLabels" . | nindent 6 }}
+
   template:
     metadata:
       labels:
         {{- include "service-c.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- if .Values.secret.create }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- end }}
         {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
+
     spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      {{- with .Values.podSecurityContext }}
       securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
 
+          {{- with .Values.securityContext }}
           securityContext:
-            {{- toYaml .Values.securityContext | nindent 12 }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
 
           ports:
             - name: http
@@ -45,24 +70,33 @@ spec:
                 name: {{ include "service-c.fullname" . }}-config
 
           env:
+            - name: SERVER_PORT
+              value: {{ .Values.containerPort | quote }}
+
+            - name: SPRING_PROFILES_ACTIVE
+              value: {{ .Values.config.springProfile | quote }}
+
+            {{- if or .Values.secret.create .Values.secret.existingSecret }}
             - name: DB_USERNAME
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.secret.name }}
+                  name: {{ default .Values.secret.name .Values.secret.existingSecret }}
                   key: database-username
                   optional: true
 
             - name: DB_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.secret.name }}
+                  name: {{ default .Values.secret.name .Values.secret.existingSecret }}
                   key: database-password
                   optional: true
+            {{- end }}
 
           readinessProbe:
             httpGet:
               path: {{ .Values.probes.readiness.path }}
               port: http
+              scheme: HTTP
             initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
             periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
             timeoutSeconds: {{ .Values.probes.readiness.timeoutSeconds }}
@@ -72,6 +106,7 @@ spec:
             httpGet:
               path: {{ .Values.probes.liveness.path }}
               port: http
+              scheme: HTTP
             initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
             periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
             timeoutSeconds: {{ .Values.probes.liveness.timeoutSeconds }}
@@ -80,4 +115,17 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
 
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
 
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

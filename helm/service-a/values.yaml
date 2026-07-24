@@ -1,9 +1,14 @@
 replicaCount: 1
 
 image:
-  repository: akshaygouda646/service-a
-  tag: v1
+  repository: service-a
   pullPolicy: IfNotPresent
+  tag: "v1"
+
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
 
 containerPort: 8083
 
@@ -11,13 +16,30 @@ service:
   type: ClusterIP
   port: 80
   targetPort: 8083
+  nodePort: 30083
+
+config:
+  springProfile: default
+  applicationName: service-a
+  serverPort: "8083"
+  loggingLevel: INFO
+
+secret:
+  create: false
+  existingSecret: ""
+  databaseUsername: ""
+  databasePassword: ""
 
 ingress:
-  enabled: true
+  enabled: false
   className: nginx
-  host: service-a.local
-  path: /
-  pathType: Prefix
+  annotations: {}
+  hosts:
+    - host: service-a.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
 
 deployment:
   revisionHistoryLimit: 5
@@ -27,47 +49,48 @@ deployment:
       maxUnavailable: 0
       maxSurge: 1
 
-probes:
-  readiness:
-    path: /actuator/health/readiness
-    initialDelaySeconds: 20
-    periodSeconds: 10
-    timeoutSeconds: 5
-    failureThreshold: 6
-
-  liveness:
-    path: /actuator/health/liveness
-    initialDelaySeconds: 40
-    periodSeconds: 15
-    timeoutSeconds: 5
-    failureThreshold: 3
-
 resources:
   requests:
-    memory: 256Mi
     cpu: 100m
+    memory: 128Mi
   limits:
-    memory: 512Mi
     cpu: 500m
+    memory: 512Mi
 
-config:
-  SPRING_PROFILES_ACTIVE: default
-  SERVICE_NAME: service-a
+livenessProbe:
+  enabled: false
+  path: /actuator/health/liveness
+  initialDelaySeconds: 120
+  periodSeconds: 15
+  timeoutSeconds: 5
+  failureThreshold: 6
 
-secret:
-  create: false
-  name: service-a-secret
-  databaseUsername: ""
-  databasePassword: ""
+readinessProbe:
+  enabled: false
+  path: /actuator/health/readiness
+  initialDelaySeconds: 70
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 6
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80
 
 podAnnotations: {}
 
+podLabels: {}
+
 podSecurityContext:
-  runAsNonRoot: true
+  runAsNonRoot: false
 
 securityContext:
-  allowPrivilegeEscalation: false
-  readOnlyRootFilesystem: false
-  capabilities:
-    drop:
-      - ALL
+  runAsNonRoot: false
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

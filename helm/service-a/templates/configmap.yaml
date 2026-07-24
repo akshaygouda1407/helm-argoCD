@@ -1,9 +1,11 @@
 apiVersion: v1
 kind: ConfigMap
+
 metadata:
   name: {{ include "service-a.fullname" . }}-config
   labels:
     {{- include "service-a.labels" . | nindent 4 }}
+
 data:
-  SPRING_PROFILES_ACTIVE: {{ .Values.config.SPRING_PROFILES_ACTIVE | quote }}
-  SERVICE_NAME: {{ .Values.config.SERVICE_NAME | quote }}
+  application-name: {{ .Values.config.applicationName | quote }}
+  spring-profile: {{ .Values.config.springProfile | quote }}

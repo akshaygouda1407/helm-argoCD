@@ -63,7 +63,7 @@ secret:
 podAnnotations: {}
 
 podSecurityContext:
-  runAsNonRoot: true
+  runAsNonRoot: false
 
 securityContext:
   allowPrivilegeEscalation: false

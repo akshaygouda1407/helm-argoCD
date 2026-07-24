@@ -6,12 +6,11 @@ metadata:
     {{- include "service-a.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
-  revisionHistoryLimit: {{ .Values.deployment.revisionHistoryLimit }}
   strategy:
-    type: {{ .Values.deployment.strategy.type }}
+    type: RollingUpdate
     rollingUpdate:
-      maxUnavailable: {{ .Values.deployment.strategy.rollingUpdate.maxUnavailable }}
-      maxSurge: {{ .Values.deployment.strategy.rollingUpdate.maxSurge }}
+      maxUnavailable: 0
+      maxSurge: 1
   selector:
     matchLabels:
       {{- include "service-a.selectorLabels" . | nindent 6 }}
@@ -19,63 +18,95 @@ spec:
     metadata:
       labels:
         {{- include "service-a.selectorLabels" . | nindent 8 }}
-      annotations:
-        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
-        {{- with .Values.podAnnotations }}
+        {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
     spec:
-      securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
       containers:
-        - name: {{ .Chart.Name }}
+        - name: service-a
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-
-          securityContext:
-            {{- toYaml .Values.securityContext | nindent 12 }}
 
           ports:
             - name: http
               containerPort: {{ .Values.containerPort }}
               protocol: TCP
 
-          envFrom:
-            - configMapRef:
-                name: {{ include "service-a.fullname" . }}-config
-
           env:
-            - name: DB_USERNAME
+            - name: SERVER_PORT
+              value: {{ .Values.config.serverPort | quote }}
+
+            - name: SPRING_PROFILES_ACTIVE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "service-a.fullname" . }}-config
+                  key: spring-profile
+
+            - name: SPRING_APPLICATION_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "service-a.fullname" . }}-config
+                  key: application-name
+
+          {{- if or .Values.secret.create .Values.secret.existingSecret }}
+            - name: DATABASE_USERNAME
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.secret.name }}
+                  name: {{ default (printf "%s-secret" (include "service-a.fullname" .)) .Values.secret.existingSecret }}
                   key: database-username
-                  optional: true
 
-            - name: DB_PASSWORD
+            - name: DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.secret.name }}
+                  name: {{ default (printf "%s-secret" (include "service-a.fullname" .)) .Values.secret.existingSecret }}
                   key: database-password
-                  optional: true
+          {{- end }}
 
-          readinessProbe:
-            httpGet:
-              path: {{ .Values.probes.readiness.path }}
-              port: http
-            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
-            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
-            timeoutSeconds: {{ .Values.probes.readiness.timeoutSeconds }}
-            failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
-
+          {{- if .Values.livenessProbe.enabled }}
           livenessProbe:
             httpGet:
-              path: {{ .Values.probes.liveness.path }}
+              path: {{ .Values.livenessProbe.path }}
               port: http
-            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
-            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
-            timeoutSeconds: {{ .Values.probes.liveness.timeoutSeconds }}
-            failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
+            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
+          {{- end }}
+
+          {{- if .Values.readinessProbe.enabled }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.readinessProbe.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
+          {{- end }}
 
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

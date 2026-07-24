@@ -5,24 +5,73 @@ image:
   tag: v1
   pullPolicy: IfNotPresent
 
-ingress:
-  enabled: true
-  host: service-c-dev.local
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+service:
+  type: NodePort
+  port: 80
+  targetPort: 8085
+  nodePort: 30085
 
 config:
-  SPRING_PROFILES_ACTIVE: dev
-  SERVICE_NAME: service-c
+  appName: service-c
+  springProfile: dev
+
+secret:
+  name: service-c-secret
+  databaseUsername: admin
+  databasePassword: password
+
+deployment:
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+
+probes:
+  readiness:
+    path: /actuator/health/readiness
+    initialDelaySeconds: 70
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 12
+
+  liveness:
+    path: /actuator/health/liveness
+    initialDelaySeconds: 120
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+podSecurityContext:
+  runAsNonRoot: false
+
+securityContext:
+  runAsNonRoot: false
+  allowPrivilegeEscalation: false
 
 resources:
   requests:
+    cpu: 100m
     memory: 128Mi
-    cpu: 50m
   limits:
-    memory: 256Mi
-    cpu: 250m
+    cpu: 500m
+    memory: 512Mi
 
-secret:
-  create: false
-  name: service-c-dev-secret
+ingress:
+  enabled: true
+  className: nginx
 
+  annotations: {}
 
+  hosts:
+    - host: service-c.local
+      paths:
+        - path: /
+          pathType: Prefix
+
+  tls: []
