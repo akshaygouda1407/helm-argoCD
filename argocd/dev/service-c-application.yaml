@@ -3,30 +3,25 @@ kind: Application
 metadata:
   name: service-c-dev
   namespace: argocd
-  finalizers:
-    - resources-finalizer.argocd.argoproj.io
+
 spec:
   project: default
+
   source:
-    repoURL: https://github.com/YOUR_GITHUB_USERNAME/helm-argocd-microservices-lab.git
+    repoURL: https://github.com/akshaygouda1407/helm-argoCD.git
     targetRevision: main
     path: helm/service-c
     helm:
       valueFiles:
         - values-dev.yaml
+
   destination:
     server: https://kubernetes.default.svc
     namespace: dev
+
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-      - ApplyOutOfSyncOnly=true
-    retry:
-      limit: 5
-      backoff:
-        duration: 5s
-        factor: 2
-        maxDuration: 3m
