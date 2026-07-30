@@ -5,3 +5,7 @@ target/
 .DS_Store
 .env
 *.iml
+
+*.tar
+*.zip
+*.tgz
