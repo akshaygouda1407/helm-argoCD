@@ -6,12 +6,14 @@ image:
   pullPolicy: IfNotPresent
 
 ingress:
-  enabled: true
+  enabled: false
   host: service-a-qa.local
 
 config:
-  SPRING_PROFILES_ACTIVE: qa
-  SERVICE_NAME: service-a
+  springProfile: qa
+  applicationName: service-a
+  serverPort: "8083"
+  loggingLevel: INFO
 
 resources:
   requests:

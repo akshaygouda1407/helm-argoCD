@@ -6,12 +6,14 @@ image:
   pullPolicy: Always
 
 ingress:
-  enabled: true
+  enabled: false
   host: service-a.example.com
 
 config:
-  SPRING_PROFILES_ACTIVE: prod
-  SERVICE_NAME: service-a
+  springProfile: prod
+  applicationName: service-a
+  serverPort: "8083"
+  loggingLevel: WARN
 
 resources:
   requests:
