@@ -20,7 +20,7 @@ config:
 
 secret:
   create: false
-  existingSecret: ""
+  existingSecret: service-a-dev-secret
   databaseUsername: ""
   databasePassword: ""
 

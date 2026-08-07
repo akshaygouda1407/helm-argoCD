@@ -4,16 +4,22 @@ metadata:
   name: {{ include "service-a.fullname" . }}
   labels:
     {{- include "service-a.labels" . | nindent 4 }}
+
 spec:
   replicas: {{ .Values.replicaCount }}
+
+  revisionHistoryLimit: {{ .Values.deployment.revisionHistoryLimit | default 5 }}
+
   strategy:
-    type: RollingUpdate
+    type: {{ .Values.deployment.strategy.type | default "RollingUpdate" }}
     rollingUpdate:
-      maxUnavailable: 0
-      maxSurge: 1
+      maxUnavailable: {{ .Values.deployment.strategy.rollingUpdate.maxUnavailable | default 0 }}
+      maxSurge: {{ .Values.deployment.strategy.rollingUpdate.maxSurge | default 1 }}
+
   selector:
     matchLabels:
       {{- include "service-a.selectorLabels" . | nindent 6 }}
+
   template:
     metadata:
       labels:
@@ -21,20 +27,33 @@ spec:
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
+
       {{- with .Values.podAnnotations }}
       annotations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
 
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
       containers:
         - name: service-a
+
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
 
           ports:
             - name: http
@@ -43,7 +62,7 @@ spec:
 
           env:
             - name: SERVER_PORT
-              value: {{ .Values.config.serverPort | quote }}
+              value: {{ .Values.config.serverPort | default (printf "%v" .Values.containerPort) | quote }}
 
             - name: SPRING_PROFILES_ACTIVE
               valueFrom:
@@ -57,7 +76,7 @@ spec:
                   name: {{ include "service-a.fullname" . }}-config
                   key: application-name
 
-          {{- if or .Values.secret.create .Values.secret.existingSecret }}
+            {{- if or .Values.secret.create .Values.secret.existingSecret }}
             - name: DATABASE_USERNAME
               valueFrom:
                 secretKeyRef:
@@ -69,7 +88,7 @@ spec:
                 secretKeyRef:
                   name: {{ default (printf "%s-secret" (include "service-a.fullname" .)) .Values.secret.existingSecret }}
                   key: database-password
-          {{- end }}
+            {{- end }}
 
           {{- if .Values.livenessProbe.enabled }}
           livenessProbe:
