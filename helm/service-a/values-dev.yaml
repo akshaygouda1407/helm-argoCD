@@ -2,7 +2,7 @@ replicaCount: 2
 
 image:
   repository: akshaygouda646/service-a
-  tag: "v1"
+  tag: "4b3df6d"
   pullPolicy: IfNotPresent
 
 containerPort: 8083
