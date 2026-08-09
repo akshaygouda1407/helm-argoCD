@@ -1,28 +1,21 @@
 replicaCount: 3
-
 image:
   repository: akshaygouda646/service-c
-  tag: v1
+  tag: main-7503362
   pullPolicy: Always
-
 ingress:
   enabled: true
   host: service-c.example.com
-
 config:
   SPRING_PROFILES_ACTIVE: prod
   SERVICE_NAME: service-c
-
 resources:
   requests:
     memory: 512Mi
     cpu: 250m
   limits:
     memory: 1Gi
-    cpu: "1"
-
+    cpu: '1'
 secret:
   create: false
   name: service-c-prod-secret
-
-

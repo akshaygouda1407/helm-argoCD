@@ -1,28 +1,23 @@
 replicaCount: 3
-
 image:
   repository: akshaygouda646/service-a
-  tag: v1
+  tag: main-7503362
   pullPolicy: Always
-
 ingress:
   enabled: false
   host: service-a.example.com
-
 config:
   springProfile: prod
   applicationName: service-a
-  serverPort: "8083"
+  serverPort: '8083'
   loggingLevel: WARN
-
 resources:
   requests:
     memory: 512Mi
     cpu: 250m
   limits:
     memory: 1Gi
-    cpu: "1"
-
+    cpu: '1'
 secret:
   create: false
   name: service-a-prod-secret
