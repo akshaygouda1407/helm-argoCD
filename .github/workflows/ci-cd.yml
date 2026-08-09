@@ -115,8 +115,7 @@ jobs:
         run: helm template ${{ matrix.service }} helm/${{ matrix.service }} -f helm/${{ matrix.service }}/values-qa.yaml
 
       - name: Render production manifests
-        run: helm template ${{ matrix.service }} helm/${{ matrix.service }} -f helm/${{ matrix.service }}/values-production.yaml
-
+        run: helm template ${{ matrix.service }} helm/${{ matrix.service }} -f helm/${{ matrix.service }}/values-prod.yaml
   update-gitops-values:
     if: github.event_name == 'push'
     needs:
