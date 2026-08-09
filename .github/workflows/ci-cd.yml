@@ -7,14 +7,16 @@ on:
       - develop
     paths:
       - "services/**"
-      - "helm/**"
       - ".github/workflows/ci-cd.yml"
+
   pull_request:
     branches:
       - main
     paths:
       - "services/**"
       - "helm/**"
+      - ".github/workflows/ci-cd.yml"
+
   workflow_dispatch:
 
 permissions:
@@ -25,6 +27,10 @@ env:
   REGISTRY: docker.io
 
 jobs:
+
+  # ==========================================================
+  # BUILD, TEST AND PUSH DOCKER IMAGES
+  # ==========================================================
   build-test-and-push:
     runs-on: ubuntu-latest
 
@@ -85,10 +91,15 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+
+  # ==========================================================
+  # HELM VALIDATION
+  # ==========================================================
   helm-validation:
     runs-on: ubuntu-latest
 
     strategy:
+      fail-fast: false
       matrix:
         service:
           - service-a
@@ -109,18 +120,33 @@ jobs:
         run: helm lint helm/${{ matrix.service }}
 
       - name: Render dev manifests
-        run: helm template ${{ matrix.service }} helm/${{ matrix.service }} -f helm/${{ matrix.service }}/values-dev.yaml
+        run: |
+          helm template ${{ matrix.service }} \
+            helm/${{ matrix.service }} \
+            -f helm/${{ matrix.service }}/values-dev.yaml
 
       - name: Render QA manifests
-        run: helm template ${{ matrix.service }} helm/${{ matrix.service }} -f helm/${{ matrix.service }}/values-qa.yaml
+        run: |
+          helm template ${{ matrix.service }} \
+            helm/${{ matrix.service }} \
+            -f helm/${{ matrix.service }}/values-qa.yaml
 
       - name: Render production manifests
-        run: helm template ${{ matrix.service }} helm/${{ matrix.service }} -f helm/${{ matrix.service }}/values-prod.yaml
+        run: |
+          helm template ${{ matrix.service }} \
+            helm/${{ matrix.service }} \
+            -f helm/${{ matrix.service }}/values-prod.yaml
+
+
+  # ==========================================================
+  # UPDATE GITOPS HELM VALUES
+  # ==========================================================
   update-gitops-values:
     if: github.event_name == 'push'
     needs:
       - build-test-and-push
       - helm-validation
+
     runs-on: ubuntu-latest
 
     steps:
@@ -128,9 +154,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Install yq
-        uses: mikefarah/yq@v4.44.3
+          fetch-depth: 0
 
       - name: Select environment
         id: env
@@ -138,7 +162,7 @@ jobs:
         run: |
           if [[ "${GITHUB_REF_NAME}" == "main" ]]; then
             echo "name=production" >> "$GITHUB_OUTPUT"
-            echo "values=values-production.yaml" >> "$GITHUB_OUTPUT"
+            echo "values=values-prod.yaml" >> "$GITHUB_OUTPUT"
           else
             echo "name=dev" >> "$GITHUB_OUTPUT"
             echo "values=values-dev.yaml" >> "$GITHUB_OUTPUT"
@@ -152,9 +176,38 @@ jobs:
         run: |
           IMAGE_TAG="${GITHUB_REF_NAME}-${GITHUB_SHA::7}"
 
+          python3 <<'PY'
+          import os
+          import yaml
+
+          username = os.environ["DOCKERHUB_USERNAME"]
+          values_file = os.environ["VALUES_FILE"]
+          image_tag = f"{os.environ['GITHUB_REF_NAME']}-{os.environ['GITHUB_SHA'][:7]}"
+
+          for service in ["service-a", "service-b", "service-c"]:
+              path = f"helm/{service}/{values_file}"
+
+              with open(path, "r") as f:
+                  values = yaml.safe_load(f)
+
+              values.setdefault("image", {})
+              values["image"]["repository"] = f"{username}/{service}"
+              values["image"]["tag"] = image_tag
+
+              with open(path, "w") as f:
+                  yaml.safe_dump(values, f, sort_keys=False)
+
+              print(f"Updated {path} -> {username}/{service}:{image_tag}")
+          PY
+
+      - name: Show updated image tags
+        shell: bash
+        run: |
+          VALUES_FILE="${{ steps.env.outputs.values }}"
+
           for service in service-a service-b service-c; do
-            yq -i ".image.repository = \"${DOCKERHUB_USERNAME}/${service}\"" "helm/${service}/${VALUES_FILE}"
-            yq -i ".image.tag = \"${IMAGE_TAG}\"" "helm/${service}/${VALUES_FILE}"
+            echo "===== ${service} ====="
+            grep -A 3 "^image:" "helm/${service}/${VALUES_FILE}"
           done
 
       - name: Commit GitOps changes
@@ -169,5 +222,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add helm/
-          git commit -m "chore(gitops): update images for ${GITHUB_REF_NAME}-${GITHUB_SHA::7}"
-          git push
+
+          git commit -m "chore(gitops): update images for ${GITHUB_REF_NAME}-${GITHUB_SHA::7} [skip ci]"
+
+          git push origin HEAD:${GITHUB_REF_NAME}
